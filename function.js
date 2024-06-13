@@ -1,7 +1,7 @@
 import { openai } from "./openai.js";
-// teach GPT how to do advanced math
+// method to call to teach GPT how to do advanced math
 import math from "advanced-calculator";
-// takes a mathematical expression as a string and then it evaluates it
+
 const QUESTION = process.argv[2] || "hi";
 
 const messages = [
@@ -17,6 +17,7 @@ const functions = {
   // you will tell GPT that when it calls the calculate function
   // it must pass an object with a property on it called expression of string type
   calculate({ expression }) {
+    // takes a mathematical expression as a string and then evaluates it
     math.evaluate(expression);
   },
 };
@@ -48,61 +49,38 @@ const getCompletions = (messages) => {
         },
       },
     ],
-    // functions: [
-    //   {
-    //     name: "calculate",
-    //     // description for GPT to know when to run this function
-    //     description: "Run a math expression",
-    //     // describes GPT which arguments to pass to the function
-    //     parameters: {
-    //       type: "object",
-    //       properties: {
-    //         expression: {
-    //           type: "string",
-    //           description:
-    //             "The math expression to evaluate like '2 * 3 + (21 / 2) ^ 2'",
-    //         },
-    //       },
-    //       // tells GPT that the expression property is required when calling this fn
-    //       required: ["expression"],
-    //     },
-    //   },
-    // ],
-    // force GPT to call this function no matter what prompt it gets (e.g. "hi")
-    // function_call: { name: "calculate" },
+    tool_choice: "auto",
   });
 };
 
 let response;
 while (true) {
   response = await getCompletions(messages);
-
+  const finishReason = response.choices[0].finish_reason;
+  const responseMessage = response.choices[0].message;
   // you know GPT is done when the "finish_reason" property on response.choices[0] equals "stop"
-  if (response.choices[0].finish_reason === "stop") {
-    console.log(response.choices[0].message.content);
+  if (finishReason === "stop") {
+    console.log(responseMessage.content);
     break;
-  } else if (response.choices[0].finish_reason === "function_call") {
-    const fnName = response.choices[0].message.function_call.name;
-    const args = response.choices[0].message.function_call.arguments;
+  } else if (finishReason === "tool_calls") {
+    // extend conversation with assistant's reply
+    messages.push(responseMessage);
 
-    const functionToCall = functions[fnName];
-    const params = JSON.parse(args);
+    const toolCalls = responseMessage.tool_calls;
+    for (const toolCall of toolCalls) {
+      const fnName = toolCall.function.name;
 
-    const result = functionToCall(params);
+      const fnToCall = functions[fnName];
+      const fnArgs = JSON.parse(toolCall.function.arguments);
 
-    messages.push({
-      role: "assistant",
-      content: null,
-      function_call: {
+      const result = fnToCall(fnArgs);
+
+      messages.push({
+        tool_call_id: toolCall.id,
+        role: "tool",
         name: fnName,
-        arguments: args,
-      },
-    });
-
-    messages.push({
-      role: "function",
-      name: fnName,
-      content: JSON.stringify({ result }),
-    });
+        content: JSON.stringify({ result }),
+      });
+    }
   }
 }
