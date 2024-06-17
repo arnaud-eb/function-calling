@@ -18,14 +18,14 @@ const functions = {
   // it must pass an object with a property on it called expression of string type
   calculate({ expression }) {
     // takes a mathematical expression as a string and then evaluates it
-    math.evaluate(expression);
+    return math.evaluate(expression);
   },
 };
 
 const getCompletions = (messages) => {
   return openai.chat.completions.create({
     model: "gpt-4o",
-    // is the model equiped with function calling
+    // is the model equiped with function calling?
     messages,
     temperature: 0,
     // array of fn that represents a schema in which there is a function that GPT can call
@@ -79,7 +79,7 @@ while (true) {
         tool_call_id: toolCall.id,
         role: "tool",
         name: fnName,
-        content: JSON.stringify({ result }),
+        content: JSON.stringify(result),
       });
     }
   }
